@@ -16,12 +16,12 @@ impl<T: Copy> Blockfree<T> {
     pub fn new(data: T) -> Self {
         let pointer = Box::into_raw(Box::new(data)) as usize;
         let version = Arc::new(AtomicUsize::new(0));
-        version.store(0, Ordering::SeqCst);
+        version.store(1, Ordering::SeqCst);
         Self { version, pointer, phantom: PhantomData }
     }
 
     pub fn write(&mut self, data: T) {
-        self.version.fetch_add(1, Ordering::SeqCst);
+        self.version.store(0, Ordering::SeqCst);
         let old_value = unsafe { *(self.pointer as *mut T) };
         unsafe { *(self.pointer as *mut T) = data };
         drop(old_value);
@@ -41,6 +41,9 @@ impl<T: Copy> Blockfree<T> {
 impl<T: Copy> Replica<T> {
     pub fn read(&self) -> Option<T> {
         let version = self.version.load(Ordering::SeqCst);
+        if version == 0 {
+            return None;
+        }
         let value = unsafe { *(self.pointer as *const T) };
         let version_after = self.version.load(Ordering::SeqCst);
         if version == version_after {
