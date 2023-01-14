@@ -24,9 +24,9 @@ assert_eq!(replica.read(), Some(2));
 ```
 
 ## TODOs
-[ ] Handle `Drop` for `Blockfree`
-[ ] Create a version that caches the last successful read
-[ ] Switch SeqCst to least strict ordering
-[ ] Support Clone instead of just Copy inner types
-[ ] Add benchmarks
-[ ] Add tests
+- [ ] Handle `Drop` for `Blockfree`
+- [ ] Create a version that caches the last successful read
+- [ ] Switch SeqCst to least strict ordering
+- [ ] Support Clone instead of just Copy inner types
+- [ ] Add benchmarks
+- [ ] Add tests for dropping
