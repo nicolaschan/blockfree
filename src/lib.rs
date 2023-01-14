@@ -1,34 +1,38 @@
 use std::{sync::{atomic::{AtomicUsize, Ordering}, Arc}, marker::PhantomData};
 
 pub struct Blockfree<T> {
-    pub pointer: Arc<AtomicUsize>,
-    phantom: PhantomData<T>,
+    version: Arc<AtomicUsize>,
+    pointer: usize,
+    phantom: PhantomData<T>
 }
 
 pub struct Replica<T> {
-    pub pointer: Arc<AtomicUsize>,
-    phantom: PhantomData<T>,
+    version: Arc<AtomicUsize>,
+    pointer: usize,
+    phantom: PhantomData<T>
 }
 
-impl<T> Blockfree<T> {
+impl<T: Copy> Blockfree<T> {
     pub fn new(data: T) -> Self {
-        let pointer = Box::into_raw(Box::new(data));
-        let atomic_pointer = Arc::new(AtomicUsize::new(0));
-        atomic_pointer.store(pointer as usize, Ordering::SeqCst);
-        Self { pointer: atomic_pointer, phantom: PhantomData }
+        let pointer = Box::into_raw(Box::new(data)) as usize;
+        let version = Arc::new(AtomicUsize::new(0));
+        version.store(0, Ordering::SeqCst);
+        Self { version, pointer, phantom: PhantomData }
     }
 
     pub fn write(&mut self, data: T) {
-        let pointer = Box::into_raw(Box::new(data));
-        let old_pointer = self.pointer.load(Ordering::SeqCst);
-        self.pointer.store(pointer as usize, Ordering::SeqCst);
-        drop(unsafe { Box::from_raw(old_pointer as *mut T) });
+        self.version.fetch_add(1, Ordering::SeqCst);
+        let old_value = unsafe { *(self.pointer as *mut T) };
+        unsafe { *(self.pointer as *mut T) = data };
+        drop(old_value);
+        self.version.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn replica(&self) -> Replica<T> {
         Replica {
+            version: self.version.clone(),
             pointer: self.pointer.clone(),
-            phantom: PhantomData,
+            phantom: PhantomData
         }
     }
 }
@@ -36,10 +40,10 @@ impl<T> Blockfree<T> {
 
 impl<T: Copy> Replica<T> {
     pub fn read(&self) -> Option<T> {
-        let pointer = self.pointer.load(Ordering::SeqCst);
-        let value = unsafe { *(pointer as *const T) };
-        let pointer_after = self.pointer.load(Ordering::SeqCst);
-        if pointer == pointer_after {
+        let version = self.version.load(Ordering::SeqCst);
+        let value = unsafe { *(self.pointer as *const T) };
+        let version_after = self.version.load(Ordering::SeqCst);
+        if version == version_after {
             Some(value)
         } else {
             None
