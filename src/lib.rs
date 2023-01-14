@@ -21,11 +21,12 @@ impl<T: Copy> Blockfree<T> {
     }
 
     pub fn write(&mut self, data: T) {
+        let old_version = self.version.load(Ordering::SeqCst);
         self.version.store(0, Ordering::SeqCst);
         let old_value = unsafe { *(self.pointer as *mut T) };
         unsafe { *(self.pointer as *mut T) = data };
         drop(old_value);
-        self.version.fetch_add(1, Ordering::SeqCst);
+        self.version.store(old_version + 1, Ordering::SeqCst);
     }
 
     pub fn replica(&self) -> Replica<T> {
